@@ -8,6 +8,10 @@
 *.gch
 *.pch
 
+# Compiled Protobuffer files
+*.pb.cc
+*.pb.h
+
 # Compiled Dynamic libraries
 *.so
 *.dylib
@@ -27,3 +31,14 @@
 *.exe
 *.out
 *.app
+
+# Make
+*.d
+
+# Eclipse IDE files
+.project
+.cproject
+.settings
+
+# Vim swap files
+*.swp

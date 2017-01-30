@@ -1,0 +1,5 @@
+{
+	"SSH_HOST": "[HOST DOMAIN OR IP]",
+	"SSH_USER": "[USER]",
+	"SSH_PASS": "[PASSWORD]"
+}

@@ -1,0 +1,5 @@
+#Executables
+Debug/slurm-framework
+Debug/slurm-executor
+Release/slurm-framework
+Release/slurm-executor
