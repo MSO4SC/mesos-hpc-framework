@@ -162,13 +162,25 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
         case Event::LAUNCH: {
           const TaskInfo& task = event.launch().task();
           tasks[task.task_id()] = task;  // Save task copy to be acknowledge.
-          slurm_tasks.emplace_back(task);  //Save task copy to monitor it in Slurm
 
           cout << "Starting task " << task.task_id().value() << endl;
 
-          //TODO send task to Slurm
+          // Do the slurm call
+          slurm_framework::jobsettings job_settings;
+          string data = task.data();
+          if (job_settings.ParseFromString(data)) {
+            string call = getSlurmCall(job_settings);
+            cout << "DEBUG: Slurm call \"" << call << "\"" << endl;
 
-          sendStatusUpdate(task, TaskState::TASK_STARTING);
+            if (callSlurm(call) == SSH_OK) {
+              sendStatusUpdate(task, TaskState::TASK_STARTING);
+              slurm_tasks.emplace_back(task);  // Save task copy to monitor it in Slurm
+            } else {
+              sendStatusUpdate(task, TaskState::TASK_FAILED);
+            }
+          } else {
+            sendStatusUpdate(task, TaskState::TASK_FAILED);
+          }
 
           break;
         }
@@ -218,7 +230,7 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
     }
   }
 
-  void slurm_control_loop() {
+  void slurmControlLoop() {
     while (true) {
       boost::this_thread::sleep(boost::posix_time::seconds(1));
 
@@ -231,8 +243,6 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
         cout << "Starting task " << task.task_id().value() << endl;
 
         sendStatusUpdate(task, TaskState::TASK_RUNNING);
-
-        execute_task(task);
 
         cout << "Finishing task " << task.task_id().value() << endl;
 
@@ -289,7 +299,7 @@ protected:
     }
 
     // Verify the server's identity
-    if (verify_knownhost() < 0) {
+    if (verifyKnownhost() < 0) {
       ssh_disconnect(my_ssh_session);
       ssh_free(my_ssh_session);
       exit(-1);
@@ -306,7 +316,7 @@ protected:
     }
 
     // Create and start Slurm control thread
-    slurm_control_th = new boost::thread(&SlurmExecutor::slurm_control_loop, this);
+    slurm_control_th = new boost::thread(&SlurmExecutor::slurmControlLoop, this);
   }
 
 private:
@@ -329,7 +339,7 @@ private:
 
   ssh_session my_ssh_session;
 
-  int verify_knownhost()
+  int verifyKnownhost()
   {
     int state, hlen;
     unsigned char *hash = NULL;
@@ -366,7 +376,7 @@ private:
       fprintf(stderr,"The server is unknown. Do you trust the host key?\n");
       fprintf(stderr, "Public key hash: %s\n", hexa);
       free(hexa);
-      if (fgets(buf, sizeof(buf), stdin) == NULL)
+      if (fgets(buf, sizeof(buf), stdin) == NULL)  //FIXME what to do in this case?
       {
         free(hash);
         return -1;
@@ -392,37 +402,64 @@ private:
     return 0;
   }
 
-  int execute_task(const TaskInfo& task) {
-    //create executable command
-    slurm_framework::jobsettings job_settings;
-    string data = task.data();
-    bool parse_result = job_settings.ParseFromString(data);
+  string getSlurmCall(const slurm_framework::jobsettings& job_settings) const {
+    stringstream slurm_call_stream;
 
-    if (parse_result) {
-      cout << "COMMAND: " << job_settings.scommand() << " " << job_settings.command() << endl;
+    //slurm command (srun on sbatch) plus nohup to detach the execution from this session
+    slurm_call_stream << "nohup " << job_settings.scommand();
 
-      stringstream command_stream;
-      command_stream << job_settings.scommand() << " " << job_settings.command();
-      string command = command_stream.str();
+    //add slurm parameters
+    if (job_settings.has_partition()) {
+      slurm_call_stream << " -p " << job_settings.partition();
+    }
 
-      ssh_channel channel;
-      int rc;
-      char buffer[256];
-      int nbytes;
-      channel = ssh_channel_new(my_ssh_session);
-      if (channel == NULL)
-      return SSH_ERROR;
-      rc = ssh_channel_open_session(channel);
-      if (rc != SSH_OK) {
-        ssh_channel_free(channel);
-        return rc;
-      }
-      rc = ssh_channel_request_exec(channel, command.c_str());
-      if (rc != SSH_OK) {
-        ssh_channel_close(channel);
-        ssh_channel_free(channel);
-        return rc;
-      }
+    if (job_settings.has_nodes()) {
+      slurm_call_stream << " -N " << job_settings.nodes();
+    }
+
+    if (job_settings.has_tasks()) {
+      slurm_call_stream << " -n " << job_settings.tasks();
+    }
+
+    if (job_settings.has_tasks_per_node()) {
+      slurm_call_stream << " --ntasks-per-node=" << job_settings.tasks_per_node();
+    }
+
+    if (job_settings.has_max_time()) {
+      slurm_call_stream << " -t " << job_settings.max_time();
+    }
+
+    //add executable and arguments
+    slurm_call_stream << " " << job_settings.command();
+
+    //disable output
+    slurm_call_stream << " >/dev/null 2>&1";
+
+    //run in the background (don't get blocked until it finish)
+    slurm_call_stream << " &";
+
+    return slurm_call_stream.str();
+  }
+
+  int callSlurm(const string& slurm_call) {
+    ssh_channel channel;
+    int rc;
+    char buffer[256];
+    int nbytes;
+    channel = ssh_channel_new(my_ssh_session);
+    if (channel == NULL)
+    return SSH_ERROR;
+    rc = ssh_channel_open_session(channel);
+    if (rc != SSH_OK) {
+      ssh_channel_free(channel);
+      return rc;
+    }
+    rc = ssh_channel_request_exec(channel, slurm_call.c_str());
+    if (rc != SSH_OK) {
+      ssh_channel_close(channel);
+      ssh_channel_free(channel);
+      return rc;
+    }
 //    nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
 //    while (nbytes > 0)
 //    {
@@ -441,13 +478,10 @@ private:
 //      ssh_channel_free(channel);
 //      return SSH_ERROR;
 //    }
-      ssh_channel_send_eof(channel);
-      ssh_channel_close(channel);
-      ssh_channel_free(channel);
-      return SSH_OK;
-    } else {
-      cerr << "Protobuf message parse failed." << endl;
-    }
+    ssh_channel_send_eof(channel);
+    ssh_channel_close(channel);
+    ssh_channel_free(channel);
+    return SSH_OK;
   }
 
 };
