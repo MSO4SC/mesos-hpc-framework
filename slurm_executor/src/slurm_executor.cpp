@@ -38,6 +38,7 @@
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/random/random_device.hpp>
 
 #include <libssh/libssh.h>
 
@@ -169,12 +170,21 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
           slurm_framework::jobsettings job_settings;
           string data = task.data();
           if (job_settings.ParseFromString(data)) {
-            string call = getSlurmCall(job_settings);
+            string name = task.name() + getRandomString(8);
+            string call = getSlurmCall(name, job_settings);
             cout << "DEBUG: Slurm call \"" << call << "\"" << endl;
 
             if (callSlurm(call) == SSH_OK) {
               sendStatusUpdate(task, TaskState::TASK_STARTING);
-              slurm_tasks.emplace_back(task);  // Save task copy to monitor it in Slurm
+              cout << "DEBUG: slurm call ok" << endl;
+
+              ulong jobid;
+              if (getJobIdByName(name, jobid) == SSH_OK) {
+                cout << "DEBUG: jobid = " << jobid << endl;
+                slurm_tasks.emplace_back(task);  // Save task copy to monitor it in Slurm
+              } else {
+                sendStatusUpdate(task, TaskState::TASK_FAILED);
+              }
             } else {
               sendStatusUpdate(task, TaskState::TASK_FAILED);
             }
@@ -339,6 +349,11 @@ private:
 
   ssh_session my_ssh_session;
 
+  const string alphanum = string(
+            "0123456789"
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "abcdefghijklmnopqrstuvwxyz");
+
   int verifyKnownhost()
   {
     int state, hlen;
@@ -402,11 +417,11 @@ private:
     return 0;
   }
 
-  string getSlurmCall(const slurm_framework::jobsettings& job_settings) const {
+  string getSlurmCall(const string& job_name, const slurm_framework::jobsettings& job_settings) const {
     stringstream slurm_call_stream;
 
     //slurm command (srun on sbatch) plus nohup to detach the execution from this session
-    slurm_call_stream << "nohup " << job_settings.scommand();
+    slurm_call_stream << "nohup " << job_settings.scommand() << " -J '" << job_name << "'";
 
     //add slurm parameters
     if (job_settings.has_partition()) {
@@ -441,7 +456,7 @@ private:
     return slurm_call_stream.str();
   }
 
-  int callSlurm(const string& slurm_call) {
+  int callSlurm(const string& slurm_call) const {
     ssh_channel channel;
     int rc;
     char buffer[256];
@@ -484,6 +499,66 @@ private:
     return SSH_OK;
   }
 
+  int getJobIdByName(const string& name, ulong& jobid) const {
+    //set sacct command
+    string command = "sacct -n -o jobid --name='" + name +"'";
+    cout << "DEBUG: jobid slurm comand: " << command << endl;
+
+    ssh_channel channel;
+    int rc;
+    char buffer[256];
+    int nbytes;
+    channel = ssh_channel_new(my_ssh_session);
+    if (channel == NULL)
+    return SSH_ERROR;
+    rc = ssh_channel_open_session(channel);
+    if (rc != SSH_OK) {
+      ssh_channel_free(channel);
+      return rc;
+    }
+    rc = ssh_channel_request_exec(channel, command.c_str());
+    if (rc != SSH_OK) {
+      ssh_channel_close(channel);
+      ssh_channel_free(channel);
+      return rc;
+    }
+
+    stringstream output;
+    nbytes = ssh_channel_read_timeout(channel, buffer, sizeof(buffer), 0, 5000);
+    while (nbytes > 0) {
+      cout << "DEBUG: Leyendo datos!!" << endl;
+      output << buffer;
+      nbytes = ssh_channel_read_timeout(channel, buffer, sizeof(buffer), 0, 5000);
+    }
+    cout << "DEBUG: Fin datos leidos!!" << endl;
+
+    if (nbytes < 0) {
+      cout << "DEBUG: nbytes < 0!!: " << endl;
+      ssh_channel_close(channel);
+      ssh_channel_free(channel);
+      return SSH_ERROR;
+    }
+
+    cout << "DEBUG: Received **" << output.str() << "**" << endl;
+    jobid = std::stoul(output.str());
+
+    ssh_channel_send_eof(channel);
+    ssh_channel_close(channel);
+    ssh_channel_free(channel);
+    return SSH_OK;
+  }
+
+  string getRandomString(const int len) {
+    stringstream ramdom_ss;
+
+    boost::random::random_device rng;
+    boost::random::uniform_int_distribution<> index_dist(0, alphanum.size() - 1);
+    for(int i = 0; i < len; ++i) {
+        ramdom_ss << alphanum[index_dist(rng)];
+    }
+
+    return ramdom_ss.str();
+  }
 };
 
 int main() {

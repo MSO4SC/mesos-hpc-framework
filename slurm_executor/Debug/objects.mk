@@ -4,5 +4,5 @@
 
 USER_OBJS :=
 
-LIBS := -lmesos -lssh -lboost_thread -lboost_system
+LIBS := -lmesos -lboost_random -lssh -lboost_thread -lboost_system
 
