@@ -248,12 +248,24 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
         }
 
         if (jobit->jobid) {
-          cout << "Starting task " << jobit->task.task_id().value() << endl;
-          sendStatusUpdate(jobit->task, TaskState::TASK_RUNNING);
+          TaskState new_state = jobit->state; //set new state as old in case there is any error
+          getJobStatus(jobit->jobid, new_state); // don't modify new_state if there is an error
 
-          cout << "Finishing task " << jobit->task.task_id().value() << endl;
-          sendStatusUpdate(jobit->task, TaskState::TASK_FINISHED);
-          jobit = slurm_jobs.erase(jobit);
+          if (jobit->state == new_state)
+            continue; // don't do anything if nothing changes
+
+          // if the job finished quickly we send first a running state
+          if (new_state == TaskState::TASK_FINISHED && jobit->state == TaskState::TASK_STARTING) {
+            sendStatusUpdate(jobit->task, TaskState::TASK_RUNNING);
+          }
+
+          sendStatusUpdate(jobit->task, new_state);
+
+          if (new_state == TaskState::TASK_FINISHED || new_state == TaskState::TASK_FAILED) {
+            jobit = slurm_jobs.erase(jobit); // delete job if finished
+          } else {
+            jobit->state = new_state; // save new state in the job info
+          }
         } else {
           ++jobit;
         }
@@ -268,8 +280,13 @@ protected:
     TaskInfo task; // mesos task object
     string name; // name used to register the job in slurm
     ulong jobid; // jobid assigned in slurm queues
+    TaskState state;
 
-    JobInfo(TaskInfo _task, string _name) : task(_task), name(_name), jobid(0) {}
+    JobInfo(TaskInfo _task, string _name)
+    : task(_task),
+      name(_name),
+      jobid(0),
+      state(TaskState::TASK_STARTING) {}
   };
 
   virtual void initialize() {
@@ -499,7 +516,7 @@ private:
   }
 
   int getJobIdByName(const string& name, ulong& jobid) const {
-    string command = "sacct -n -o jobid --name='" + name +"'";
+    string command = "sacct -n -o jobid -X --name='" + name +"'";
 
     ssh_channel channel;
     int rc;
@@ -533,6 +550,70 @@ private:
       return SSH_ERROR;
     } else if (output.str().size() > 0) {
       jobid = std::stoul(output.str());
+    }
+
+    ssh_channel_send_eof(channel);
+    ssh_channel_close(channel);
+    ssh_channel_free(channel);
+    return SSH_OK;
+  }
+
+  int getJobStatus(const ulong& jobid, TaskState& state) const {
+    string command = "sacct -n -o state -X -P -j " + jobid;
+    cout << "DEBUG getJobStatus: " << command << endl;
+
+    ssh_channel channel;
+    int rc;
+    char buffer[256];
+    int nbytes;
+    channel = ssh_channel_new(my_ssh_session);
+    if (channel == NULL)
+    return SSH_ERROR;
+    rc = ssh_channel_open_session(channel);
+    if (rc != SSH_OK) {
+      ssh_channel_free(channel);
+      return rc;
+    }
+    rc = ssh_channel_request_exec(channel, command.c_str());
+    if (rc != SSH_OK) {
+      ssh_channel_close(channel);
+      ssh_channel_free(channel);
+      return rc;
+    }
+
+    stringstream output;
+    nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
+    while (nbytes > 0) {
+      output.write(buffer, nbytes);
+      nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
+    }
+
+    if (nbytes < 0) {
+      ssh_channel_close(channel);
+      ssh_channel_free(channel);
+      return SSH_ERROR;
+    } else if (output.str().size() > 0) {
+      string state_str = output.str();
+      cout << "DEBUG RECEIVED: " << state_str << endl;
+      if (state_str == "PENDING" ||
+          state_str == "CONFIGURING") {
+        state = TaskState::TASK_STARTING;
+      } else if (state_str == "RUNNING" ||
+          state_str == "COMPLETING") {
+        state = TaskState::TASK_RUNNING;
+
+      } else if (state_str == "COMPLETED") {
+        state = TaskState::TASK_FINISHED;
+      } else if (state_str == "BOOT_FAIL" ||
+          state_str == "CANCELLED" ||
+          state_str == "DEADLINE" ||
+          state_str == "FAILED" ||
+          state_str == "PREEMPTED" ||
+          state_str == "TIMEOUT"){
+        state = TaskState::TASK_FAILED;
+      } else { // RESIZING, SUSPENDED
+        state = TaskState::TASK_FAILED;
+      }
     }
 
     ssh_channel_send_eof(channel);
