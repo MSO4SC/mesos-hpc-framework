@@ -42,6 +42,8 @@
 
 #include <libssh/libssh.h>
 
+#include <unistd.h>
+
 #include "jobsettings.pb.h"
 
 using std::cout;
@@ -68,9 +70,6 @@ using process::spawn;
 using process::wait;
 
 using boost::thread;
-
-using boost::property_tree::ptree;
-using boost::property_tree::read_json;
 
 class SlurmExecutor : public process::Process<SlurmExecutor> {
  public:
@@ -166,6 +165,12 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
 
           cout << "Starting task " << task.task_id().value() << endl;
 
+//          testSshOutput();
+//          testSacctOutput();
+//          sendStatusUpdate(task, TaskState::TASK_STARTING);
+//          slurm_tasks.emplace_back(task);
+//          break;
+
           // Do the slurm call
           slurm_framework::jobsettings job_settings;
           string data = task.data();
@@ -178,13 +183,10 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
               sendStatusUpdate(task, TaskState::TASK_STARTING);
               cout << "DEBUG: slurm call ok" << endl;
 
-              ulong jobid;
-              if (getJobIdByName(name, jobid) == SSH_OK) {
-                cout << "DEBUG: jobid = " << jobid << endl;
-                slurm_tasks.emplace_back(task);  // Save task copy to monitor it in Slurm
-              } else {
-                sendStatusUpdate(task, TaskState::TASK_FAILED);
-              }
+              jobs_mutex.lock();
+              slurm_jobs.emplace_back(JobInfo(task, name));  // Save task copy to monitor it in Slurm
+              jobs_mutex.unlock();
+
             } else {
               sendStatusUpdate(task, TaskState::TASK_FAILED);
             }
@@ -244,27 +246,40 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
     while (true) {
       boost::this_thread::sleep(boost::posix_time::seconds(1));
 
-      tasks_mutex.lock();
+      jobs_mutex.lock();
 
-      for (const TaskInfo& task : slurm_tasks) {
+      list<JobInfo>::iterator jobit = slurm_jobs.begin();
+      while(jobit != slurm_jobs.end()) {
+        //the job takes some seconds to appear in the queues list
+        if (!jobit->jobid) {
+          getJobIdByName(jobit->name, jobit->jobid);
+        }
 
-        //TODO check task status in Slurm and send update if it is necessary
+        if (jobit->jobid) {
+          cout << "Starting task " << jobit->task.task_id().value() << endl;
+          sendStatusUpdate(jobit->task, TaskState::TASK_RUNNING);
 
-        cout << "Starting task " << task.task_id().value() << endl;
-
-        sendStatusUpdate(task, TaskState::TASK_RUNNING);
-
-        cout << "Finishing task " << task.task_id().value() << endl;
-
-        sendStatusUpdate(task, TaskState::TASK_FINISHED);
+          cout << "Finishing task " << jobit->task.task_id().value() << endl;
+          sendStatusUpdate(jobit->task, TaskState::TASK_FINISHED);
+          jobit = slurm_jobs.erase(jobit);
+        } else {
+          ++jobit;
+        }
       }
-      slurm_tasks.clear();
 
-      tasks_mutex.unlock();
+      jobs_mutex.unlock();
     }
   }
 
 protected:
+  struct JobInfo {
+    TaskInfo task; // mesos task object
+    string name; // name used to register the job in slurm
+    ulong jobid; // jobid assigned in slurm queues
+
+    JobInfo(TaskInfo _task, string _name) : task(_task), name(_name), jobid(0) {}
+  };
+
   virtual void initialize() {
     // We initialize the library here to ensure that callbacks are only invoked
     // after the process has spawned.
@@ -304,7 +319,7 @@ protected:
     int rc = ssh_connect(my_ssh_session);
     if (rc != SSH_OK) {
       fprintf(stderr, "Error connecting to %s: %s\n",
-          host, ssh_get_error(my_ssh_session));
+          host.get().c_str(), ssh_get_error(my_ssh_session));
       exit(-1);
     }
 
@@ -343,16 +358,16 @@ private:
   LinkedHashMap<UUID, Call::Update> updates;  // Unacknowledged updates.
   LinkedHashMap<TaskID, TaskInfo> tasks;// Unacknowledged tasks.
 
-  list<TaskInfo> slurm_tasks;// Tasks currently managed by Slurm.
-  boost::mutex tasks_mutex;// Mutex to lock the slurm_tasks list between threads.
+  list<JobInfo> slurm_jobs;// Tasks currently managed by Slurm.
+  boost::mutex jobs_mutex;// Mutex to lock the slurm_tasks list between threads.
   thread * slurm_control_th;// Slurm control thread.
 
   ssh_session my_ssh_session;
 
   const string alphanum = string(
-            "0123456789"
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            "abcdefghijklmnopqrstuvwxyz");
+      "0123456789"
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz");
 
   int verifyKnownhost()
   {
@@ -475,24 +490,7 @@ private:
       ssh_channel_free(channel);
       return rc;
     }
-//    nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
-//    while (nbytes > 0)
-//    {
-//      if (write(1, buffer, nbytes) != (unsigned int) nbytes)
-//      {
-//        ssh_channel_close(channel);
-//        ssh_channel_free(channel);
-//        return SSH_ERROR;
-//      }
-//      nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
-//    }
-//
-//    if (nbytes < 0)
-//    {
-//      ssh_channel_close(channel);
-//      ssh_channel_free(channel);
-//      return SSH_ERROR;
-//    }
+
     ssh_channel_send_eof(channel);
     ssh_channel_close(channel);
     ssh_channel_free(channel);
@@ -500,7 +498,6 @@ private:
   }
 
   int getJobIdByName(const string& name, ulong& jobid) const {
-    //set sacct command
     string command = "sacct -n -o jobid --name='" + name +"'";
     cout << "DEBUG: jobid slurm comand: " << command << endl;
 
@@ -524,11 +521,11 @@ private:
     }
 
     stringstream output;
-    nbytes = ssh_channel_read_timeout(channel, buffer, sizeof(buffer), 0, 5000);
+    nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
     while (nbytes > 0) {
-      cout << "DEBUG: Leyendo datos!!" << endl;
-      output << buffer;
-      nbytes = ssh_channel_read_timeout(channel, buffer, sizeof(buffer), 0, 5000);
+      cout << "DEBUG: Leyendo datos!! (" << nbytes << "): **" << buffer << "**" << endl;
+      output.write(buffer, nbytes);
+      nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
     }
     cout << "DEBUG: Fin datos leidos!!" << endl;
 
@@ -537,10 +534,10 @@ private:
       ssh_channel_close(channel);
       ssh_channel_free(channel);
       return SSH_ERROR;
+    } else if (output.str().size() > 0) {
+      cout << "DEBUG: Received **" << output.str() << "**" << endl;
+      jobid = std::stoul(output.str());
     }
-
-    cout << "DEBUG: Received **" << output.str() << "**" << endl;
-    jobid = std::stoul(output.str());
 
     ssh_channel_send_eof(channel);
     ssh_channel_close(channel);
@@ -554,7 +551,7 @@ private:
     boost::random::random_device rng;
     boost::random::uniform_int_distribution<> index_dist(0, alphanum.size() - 1);
     for(int i = 0; i < len; ++i) {
-        ramdom_ss << alphanum[index_dist(rng)];
+      ramdom_ss << alphanum[index_dist(rng)];
     }
 
     return ramdom_ss.str();
