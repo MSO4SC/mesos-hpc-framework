@@ -15,18 +15,23 @@
 package slurm_framework;
 
 message jobsettings {
-	required string scommand = 1;
+	enum slurmCommandType {
+		SRUN = 0;
+		SBATCH = 1;
+	}
+
+	required slurmCommandType type = 1;
 	required string command = 2;
 	
-	optional string partition = 3;
-	optional int32 nodes = 4;
-	optional bool exclusive = 5;
-	optional int32 tasks = 6;
-	optional int32 tasks_per_node = 7;
-	optional int32 cpus_per_task = 8;
-	optional int32 cores_per_node = 9;
-	optional int32 mem = 10;
-	optional int32 mem_per_cpu = 11;
-	optional string max_time = 12 ;
-	
+	repeated string modules = 3;
+	optional string partition = 4;
+	optional int32 nodes = 5;
+	optional bool exclusive = 6;
+	optional int32 tasks = 7;
+	optional int32 tasks_per_node = 8;
+	optional int32 cpus_per_task = 9;
+	optional int32 cores_per_node = 10;
+	optional int32 mem = 11;
+	optional int32 mem_per_cpu = 12;
+	optional string max_time = 13;
 }

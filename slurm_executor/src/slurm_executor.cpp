@@ -165,23 +165,15 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
 
           cout << "Starting task " << task.task_id().value() << endl;
 
-//          testSshOutput();
-//          testSacctOutput();
-//          sendStatusUpdate(task, TaskState::TASK_STARTING);
-//          slurm_tasks.emplace_back(task);
-//          break;
-
           // Do the slurm call
           slurm_framework::jobsettings job_settings;
           string data = task.data();
           if (job_settings.ParseFromString(data)) {
             string name = task.name() + getRandomString(8);
             string call = getSlurmCall(name, job_settings);
-            cout << "DEBUG: Slurm call \"" << call << "\"" << endl;
 
             if (callSlurm(call) == SSH_OK) {
               sendStatusUpdate(task, TaskState::TASK_STARTING);
-              cout << "DEBUG: slurm call ok" << endl;
 
               jobs_mutex.lock();
               slurm_jobs.emplace_back(JobInfo(task, name));  // Save task copy to monitor it in Slurm
@@ -435,8 +427,15 @@ private:
   string getSlurmCall(const string& job_name, const slurm_framework::jobsettings& job_settings) const {
     stringstream slurm_call_stream;
 
-    //slurm command (srun on sbatch) plus nohup to detach the execution from this session
-    slurm_call_stream << "nohup " << job_settings.scommand() << " -J '" << job_name << "'";
+    if (job_settings.type() == slurm_framework::jobsettings::SBATCH) {
+      //sbatch command plus job name
+      slurm_call_stream << "sbatch -J '" << job_name << "'";
+    } else if (job_settings.type() == slurm_framework::jobsettings::SRUN) {
+      //srun command plus nohup to detach the execution from this session and job name
+      slurm_call_stream << "nohup srun -J '" << job_name << "'";
+    } else {
+      //TODO ERROR
+    }
 
     //add slurm parameters
     if (job_settings.has_partition()) {
@@ -462,11 +461,13 @@ private:
     //add executable and arguments
     slurm_call_stream << " " << job_settings.command();
 
-    //disable output
-    slurm_call_stream << " >/dev/null 2>&1";
+//    //disable output
+//    slurm_call_stream << " >/dev/null 2>&1";
 
-    //run in the background (don't get blocked until it finish)
-    slurm_call_stream << " &";
+    if (job_settings.type() == slurm_framework::jobsettings::SRUN) {
+      //run in the background (don't get blocked until it finish)
+      slurm_call_stream << " &";
+    }
 
     return slurm_call_stream.str();
   }
@@ -499,7 +500,6 @@ private:
 
   int getJobIdByName(const string& name, ulong& jobid) const {
     string command = "sacct -n -o jobid --name='" + name +"'";
-    cout << "DEBUG: jobid slurm comand: " << command << endl;
 
     ssh_channel channel;
     int rc;
@@ -523,19 +523,15 @@ private:
     stringstream output;
     nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
     while (nbytes > 0) {
-      cout << "DEBUG: Leyendo datos!! (" << nbytes << "): **" << buffer << "**" << endl;
       output.write(buffer, nbytes);
       nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
     }
-    cout << "DEBUG: Fin datos leidos!!" << endl;
 
     if (nbytes < 0) {
-      cout << "DEBUG: nbytes < 0!!: " << endl;
       ssh_channel_close(channel);
       ssh_channel_free(channel);
       return SSH_ERROR;
     } else if (output.str().size() > 0) {
-      cout << "DEBUG: Received **" << output.str() << "**" << endl;
       jobid = std::stoul(output.str());
     }
 

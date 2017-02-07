@@ -235,18 +235,18 @@ private:
 
         //job settings
         slurm_framework::jobsettings job_settings;
-        job_settings.set_scommand("srun");
+        job_settings.set_type(slurm_framework::jobsettings::SBATCH);
 
         stringstream command_stream;
-        command_stream << "touch task" << taskId << ".test";
+        command_stream << "sbatch_test.script task" << taskId << ".test";
         string command = command_stream.str();
         job_settings.set_command(command);
 
-        job_settings.set_partition("thinnodes");
-        job_settings.set_nodes(2);
-        job_settings.set_tasks(8);
-        job_settings.set_tasks_per_node(4);
-        job_settings.set_max_time("00:00:15");
+//        job_settings.set_partition("thinnodes");
+//        job_settings.set_nodes(2);
+//        job_settings.set_tasks(8);
+//        job_settings.set_tasks_per_node(4);
+//        job_settings.set_max_time("00:00:15");
 
         string serialized_job_settings = job_settings.SerializeAsString();
 
