@@ -251,8 +251,10 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
           TaskState new_state = jobit->state; //set new state as old in case there is any error
           getJobStatus(jobit->jobid, new_state); // don't modify new_state if there is an error
 
-          if (jobit->state == new_state)
+          if (jobit->state == new_state) {
+            ++jobit;
             continue; // don't do anything if nothing changes
+          }
 
           // if the job finished quickly we send first a running state
           if (new_state == TaskState::TASK_FINISHED && jobit->state == TaskState::TASK_STARTING) {
@@ -265,6 +267,7 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
             jobit = slurm_jobs.erase(jobit); // delete job if finished
           } else {
             jobit->state = new_state; // save new state in the job info
+            ++jobit;
           }
         } else {
           ++jobit;
@@ -559,8 +562,7 @@ private:
   }
 
   int getJobStatus(const ulong& jobid, TaskState& state) const {
-    string command = "sacct -n -o state -X -P -j " + jobid;
-    cout << "DEBUG getJobStatus: " << command << endl;
+    string command = "sacct -n -o state -X -P -j " + std::to_string(jobid);
 
     ssh_channel channel;
     int rc;
@@ -594,7 +596,9 @@ private:
       return SSH_ERROR;
     } else if (output.str().size() > 0) {
       string state_str = output.str();
-      cout << "DEBUG RECEIVED: " << state_str << endl;
+      state_str.pop_back(); // delete end of line character
+      //cout << "DEBUG RECEIVED: " << state_str << endl;
+
       if (state_str == "PENDING" ||
           state_str == "CONFIGURING") {
         state = TaskState::TASK_STARTING;
@@ -602,17 +606,18 @@ private:
           state_str == "COMPLETING") {
         state = TaskState::TASK_RUNNING;
 
-      } else if (state_str == "COMPLETED") {
+      } else if (state_str == "COMPLETED" ||
+          state_str == "PREEMPTED") {
         state = TaskState::TASK_FINISHED;
       } else if (state_str == "BOOT_FAIL" ||
           state_str == "CANCELLED" ||
           state_str == "DEADLINE" ||
           state_str == "FAILED" ||
-          state_str == "PREEMPTED" ||
           state_str == "TIMEOUT"){
         state = TaskState::TASK_FAILED;
       } else { // RESIZING, SUSPENDED
         state = TaskState::TASK_FAILED;
+        cout << "ERROR: State '" << state_str << "' could not be recognized." << endl;
       }
     }
 
