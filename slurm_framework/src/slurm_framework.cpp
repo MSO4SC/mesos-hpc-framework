@@ -242,6 +242,12 @@ private:
         string command = command_stream.str();
         job_settings.set_command(command);
 
+        job_settings.add_modules("gcc/5.3.0");
+        job_settings.add_modules("impi");
+        job_settings.add_modules("petsc");
+        job_settings.add_modules("parmetis");
+        job_settings.add_modules("zlib");
+
 //        job_settings.set_partition("thinnodes");
 //        job_settings.set_nodes(2);
 //        job_settings.set_tasks(8);

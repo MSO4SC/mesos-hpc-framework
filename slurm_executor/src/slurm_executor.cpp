@@ -447,6 +447,15 @@ private:
   string getSlurmCall(const string& job_name, const slurm_framework::jobsettings& job_settings) const {
     stringstream slurm_call_stream;
 
+    //first set modules
+    if (job_settings.modules_size() > 0) {
+      slurm_call_stream << "module load";
+      for (int i = 0; i < job_settings.modules_size(); ++i) {
+        slurm_call_stream << " " << job_settings.modules(i);
+      }
+      slurm_call_stream << " > mod.o; ";
+    }
+
     if (job_settings.type() == slurm_framework::jobsettings::SBATCH) {
       //sbatch command plus job name
       slurm_call_stream << "sbatch -J '" << job_name << "'";
