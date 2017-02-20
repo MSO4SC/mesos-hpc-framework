@@ -1,5 +1,6 @@
 language: cpp
 dist: jessie
+sudo: required
 compiler:
 - gcc
 os:
