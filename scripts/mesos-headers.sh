@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-## mesos development
-sudo apt-get update -qq
-sudo apt-get install libboost-dev libboost-thread-dev libboost-random-dev libssh-dev libprotobuf-dev protobuf-compiler -y -qq
-sudo ln -s /usr/lib/x86_64-linux-gnu/libboost_system.so.1.58.0 /usr/lib/x86_64-linux-gnu/libboost_system.so
-sudo ln -s /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.58.0 /usr/lib/x86_64-linux-gnu/libboost_filesystem.so
+## installs mesos headers
+unzip ./scripts/mesos-headers.zip
+sudo mv mesos /usr/local/include/
