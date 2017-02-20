@@ -15,9 +15,16 @@
 # limitations under the License.
 
 ## installs mesos headers
-unzip ./scripts/mesos-headers.zip
+unzip ./3rdparty/mesos-headers.zip
 sudo mv mesos /usr/local/include/
 
+unzip ./3rdparty/stout-headers.zip
+sudo mv stout /usr/local/include/
+
+unzip ./3rdparty/glog-headers.zip
+sudo mv glog /usr/local/include/
+
+## generate  protobuf mesos headers files
 sudo protoc -I=/usr/local/include --cpp_out=/usr/local/include /usr/local/include/mesos/*.proto
 sudo protoc -I=/usr/local/include --cpp_out=/usr/local/include /usr/local/include/mesos/agent/*.proto
 sudo protoc -I=/usr/local/include --cpp_out=/usr/local/include /usr/local/include/mesos/allocator/*.proto
