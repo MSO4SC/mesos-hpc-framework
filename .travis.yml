@@ -1,0 +1,11 @@
+language: cpp
+dist: jessie
+compiler:
+- gcc
+os:
+- linux
+before_install:
+- echo $LANG
+- echo $LC_ALL
+- ./scripts/dependencies.sh
+script: ./scripts/build.sh
