@@ -15,9 +15,9 @@
 # limitations under the License.
 
 ## framework build
-protoc -I=../slurm_framework/src --cpp_out=../slurm_framework/src ../slurm_framework/src/jobsettings.proto
-make -C ../slurm_framework/Debug
+protoc -I=./hpc_framework/src --cpp_out=./hpc_framework/src ./hpc_framework/src/jobsettings.proto
+make -C ./hpc_framework/Debug
 
 ## slurm executor build
-protoc -I=../slurm_executor/src --cpp_out=../slurm_executor/src ../slurm_executor/src/jobsettings.proto
-make -C ../slurm_executor/Debug
+protoc -I=./slurm_executor/src --cpp_out=./slurm_executor/src ./slurm_executor/src/jobsettings.proto
+make -C ./slurm_executor/Debug
