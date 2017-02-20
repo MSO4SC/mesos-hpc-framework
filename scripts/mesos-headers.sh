@@ -21,6 +21,9 @@ sudo mv mesos /usr/local/include/
 unzip ./3rdparty/stout-headers.zip
 sudo mv stout /usr/local/include/
 
+unzip ./3rdparty/process-headers.zip
+sudo mv glog /usr/local/include/
+
 unzip ./3rdparty/glog-headers.zip
 sudo mv glog /usr/local/include/
 
