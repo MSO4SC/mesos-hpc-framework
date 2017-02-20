@@ -17,3 +17,30 @@
 ## installs mesos headers
 unzip ./scripts/mesos-headers.zip
 sudo mv mesos /usr/local/include/
+
+sudo protoc -I=/usr/local/include/mesos --cpp_out=/usr/local/include/mesos /usr/local/include/mesos/*.proto
+sudo protoc -I=/usr/local/include/mesos/agent --cpp_out=/usr/local/include/mesos/agent /usr/local/include/mesos/agent/*.proto
+sudo protoc -I=/usr/local/include/mesos/allocator --cpp_out=/usr/local/include/mesos/allocator /usr/local/include/mesos/allocator/*.proto
+sudo protoc -I=/usr/local/include/mesos/appc --cpp_out=/usr/local/include/mesos/appc /usr/local/include/mesos/appc/*.proto
+sudo protoc -I=/usr/local/include/mesos/authentication --cpp_out=/usr/local/include/mesos/authentication /usr/local/include/mesos/authentication/*.proto
+sudo protoc -I=/usr/local/include/mesos/authorizer --cpp_out=/usr/local/include/mesos/authorizer /usr/local/include/mesos/authorizer/*.proto
+sudo protoc -I=/usr/local/include/mesos/docker --cpp_out=/usr/local/include/mesos/docker /usr/local/include/mesos/docker/*.proto
+sudo protoc -I=/usr/local/include/mesos/executor --cpp_out=/usr/local/include/mesos/executor /usr/local/include/mesos/executor/*.proto
+sudo protoc -I=/usr/local/include/mesos/fetcher --cpp_out=/usr/local/include/mesos/fetcher /usr/local/include/mesos/fetcher/*.proto
+sudo protoc -I=/usr/local/include/mesos/maintenance --cpp_out=/usr/local/include/mesos/maintenance /usr/local/include/mesos/maintenance/*.proto
+sudo protoc -I=/usr/local/include/mesos/master --cpp_out=/usr/local/include/mesos/master /usr/local/include/mesos/master/*.proto
+sudo protoc -I=/usr/local/include/mesos/module --cpp_out=/usr/local/include/mesos/module /usr/local/include/mesos/module/*.proto
+sudo protoc -I=/usr/local/include/mesos/quota --cpp_out=/usr/local/include/mesos/quota /usr/local/include/mesos/quota/*.proto
+sudo protoc -I=/usr/local/include/mesos/scheduler --cpp_out=/usr/local/include/mesos/scheduler /usr/local/include/mesos/scheduler/*.proto
+sudo protoc -I=/usr/local/include/mesos/slave --cpp_out=/usr/local/include/mesos/slave /usr/local/include/mesos/slave/*.proto
+sudo protoc -I=/usr/local/include/mesos/uri --cpp_out=/usr/local/include/mesos/uri /usr/local/include/mesos/uri/*.proto
+
+sudo protoc -I=/usr/local/include/mesos/v1 --cpp_out=/usr/local/include/mesos/v1 /usr/local/include/mesos/v1/*.proto
+sudo protoc -I=/usr/local/include/mesos/v1/agent --cpp_out=/usr/local/include/mesos/v1/agent /usr/local/include/mesos/v1/agent/*.proto
+sudo protoc -I=/usr/local/include/mesos/v1/allocator --cpp_out=/usr/local/include/mesos/v1/allocator /usr/local/include/mesos/v1/allocator/*.proto
+sudo protoc -I=/usr/local/include/mesos/v1/executor --cpp_out=/usr/local/include/mesos/v1/executor /usr/local/include/mesos/v1/executor/*.proto
+sudo protoc -I=/usr/local/include/mesos/v1/maintenance --cpp_out=/usr/local/include/mesos/v1/maintenance /usr/local/include/mesos/v1/maintenance/*.proto
+sudo protoc -I=/usr/local/include/mesos/v1/master --cpp_out=/usr/local/include/mesos/v1/master /usr/local/include/mesos/master/v1/*.proto
+sudo protoc -I=/usr/local/include/mesos/v1/quota --cpp_out=/usr/local/include/mesos/v1/quota /usr/local/include/mesos/v1/quota/*.proto
+sudo protoc -I=/usr/local/include/mesos/v1/scheduler --cpp_out=/usr/local/include/mesos/v1/scheduler /usr/local/include/mesos/v1/scheduler/*.proto
+
