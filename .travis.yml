@@ -9,4 +9,6 @@ before_install:
 - echo $LANG
 - echo $LC_ALL
 - ./scripts/build-dependencies.sh
+- echo "--------------------------------------------------------------"
+- ls /usr/local/include/mesos
 script: ./scripts/build.sh

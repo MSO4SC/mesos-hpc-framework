@@ -1,5 +1,5 @@
 #Executables
-Debug/slurm-framework
+Debug/hpc-framework
 Debug/slurm-executor
-Release/slurm-framework
+Release/hpc-framework
 Release/slurm-executor
