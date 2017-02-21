@@ -53,11 +53,11 @@ sudo mv mesos-* /opt
 
 # Install.
 cd /opt/mesos-*
-sudo make install
+sudo -H make install
 sudo ldconfig
 
 # Mesos framework & executor additional development dependencies
 sudo apt-get update
-sudo apt-get install libboost-dev libboost-thread-dev libboost-random-dev libssh-dev libprotobuf-dev protobuf-compiler -y
+sudo apt-get install -y libboost-dev libboost-thread-dev libboost-random-dev libssh-dev
 sudo ln -s /usr/lib/x86_64-linux-gnu/libboost_system.so.1.58.0 /usr/lib/x86_64-linux-gnu/libboost_system.so
 sudo ln -s /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.58.0 /usr/lib/x86_64-linux-gnu/libboost_filesystem.so
