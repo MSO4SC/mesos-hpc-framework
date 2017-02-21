@@ -14,7 +14,49 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-## mesos development
+# Update the packages.
+sudo apt-get update
+
+# Install a few utility tools.
+sudo apt-get install -y tar wget git
+
+# Install the latest OpenJDK.
+sudo apt-get install -y openjdk-8-jdk
+
+# Install autotools (Only necessary if building from git repository).
+#sudo apt-get install -y autoconf libtool
+
+# Install other Mesos dependencies.
+sudo apt-get -y install build-essential python-dev libcurl4-nss-dev libsasl2-dev libsasl2-modules maven libapr1-dev libsvn-dev zlib1g-dev
+
+# Download and extract mesos
+wget -q http://www.apache.org/dist/mesos/1.1.0/mesos-1.1.0.tar.gz
+tar -xvzf mesos-*
+rm mesos-*.tar.gz
+cd mesos-*
+
+# Bootstrap (Only required if building from git repository).
+#./bootstrap
+
+# Configure and build.
+mkdir build
+cd build
+../configure
+make
+
+# Run test suite.
+#make check
+
+# move mesos to /opt
+cd ../../
+sudo mv mesos-* /opt
+
+# Install.
+cd /opt/mesos-*
+sudo make install
+sudo ldconfig
+
+# Mesos framework & executor additional development dependencies
 sudo apt-get update
 sudo apt-get install libboost-dev libboost-thread-dev libboost-random-dev libssh-dev libprotobuf-dev protobuf-compiler -y
 sudo ln -s /usr/lib/x86_64-linux-gnu/libboost_system.so.1.58.0 /usr/lib/x86_64-linux-gnu/libboost_system.so
