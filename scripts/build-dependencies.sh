@@ -52,7 +52,7 @@ cd ../../
 sudo mv mesos-* /opt
 
 # Install.
-cd /opt/mesos-*
+cd /opt/mesos-*/build
 sudo -H make install
 sudo ldconfig
 
