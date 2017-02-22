@@ -6,7 +6,7 @@ compiler:
 os:
 - linux
 before_install:
-- pip2.7 install --upgrade --user travis pip setuptools wheel virtualenv
+- pip install --upgrade --user travis pip setuptools wheel virtualenv
 - ./scripts/build-dependencies.sh
 - echo "--------------------------------------------------------------"
 - ls /usr/local/include
