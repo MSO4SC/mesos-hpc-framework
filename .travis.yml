@@ -6,9 +6,8 @@ compiler:
 os:
 - linux
 before_install:
-- echo $LANG
-- echo $LC_ALL
+- pip2.7 install --upgrade --user travis pip setuptools wheel virtualenv
 - ./scripts/build-dependencies.sh
 - echo "--------------------------------------------------------------"
-- ls /usr/local/include/mesos
+- ls /usr/local/include
 script: ./scripts/build.sh
