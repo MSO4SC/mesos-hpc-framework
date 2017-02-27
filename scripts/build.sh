@@ -14,10 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-## framework build
-/opt/mesos-1.1.0/build/3rdparty/protobuf-2.6.1/src/protoc -I=./hpc_framework/src --cpp_out=./hpc_framework/src ./hpc_framework/src/jobsettings.proto
-make -C ./hpc_framework/Release
+# move to current directory
+cd "$(dirname "$0")"
+
+# get project full path
+ROOT=$(readlink -f ../.)
 
 ## slurm executor build
-/opt/mesos-1.1.0/build/3rdparty/protobuf-2.6.1/src/protoc -I=./slurm_executor/src --cpp_out=./slurm_executor/src ./slurm_executor/src/jobsettings.proto
-make -C ./slurm_executor/Release
+/opt/mesos-1.1.0/build/3rdparty/protobuf-2.6.1/src/protoc -I=$ROOT/slurm_executor/src --cpp_out=$ROOT/slurm_executor/src $ROOT/slurm_executor/src/jobsettings.proto
+make -C $ROOT/slurm_executor/Release
+
+## framework build
+/opt/mesos-1.1.0/build/3rdparty/protobuf-2.6.1/src/protoc -I=$ROOT/hpc_framework/src --cpp_out=$ROOT/hpc_framework/src $ROOT/hpc_framework/src/jobsettings.proto
+make -C $ROOT/hpc_framework/Release
+ln -fs $ROOT/slurm_executor/Release/slurm-executor $ROOT/hpc_framework/Release/
