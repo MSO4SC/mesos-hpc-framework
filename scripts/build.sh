@@ -16,8 +16,8 @@
 
 ## framework build
 /opt/mesos-1.1.0/build/3rdparty/protobuf-2.6.1/src/protoc -I=./hpc_framework/src --cpp_out=./hpc_framework/src ./hpc_framework/src/jobsettings.proto
-make -C ./hpc_framework/Debug
+make -C ./hpc_framework/Release
 
 ## slurm executor build
 /opt/mesos-1.1.0/build/3rdparty/protobuf-2.6.1/src/protoc -I=./slurm_executor/src --cpp_out=./slurm_executor/src ./slurm_executor/src/jobsettings.proto
-make -C ./slurm_executor/Debug
+make -C ./slurm_executor/Release
