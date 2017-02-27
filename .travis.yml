@@ -6,7 +6,6 @@ compiler:
 os:
 - linux
 before_install:
-- sudo -H pip install setuptools --upgrade
 - ./scripts/build-dependencies.sh
 - echo "--------------------------------------------------------------"
 - ls /usr/local/include
