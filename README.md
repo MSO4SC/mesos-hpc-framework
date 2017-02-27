@@ -1,6 +1,6 @@
 # Mesos HPC Framework
 
-[![Join the chat at https://gitter.im/MSO4SC/mesos-slurm-framework](https://badges.gitter.im/MSO4SC/mesos-slurm-framework.svg)](https://gitter.im/MSO4SC/mesos-slurm-framework?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Join the chat at https://gitter.im/MSO4SC/mesos-hpc-framework](https://badges.gitter.im/MSO4SC/mesos-hpc-framework.svg)](https://gitter.im/MSO4SC/mesos-hpc-framework?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 The HPC framework for Mesos runs tasks on different HPC machines. It is in heavy development (see issues) and for now should not be considered as estable.
 
