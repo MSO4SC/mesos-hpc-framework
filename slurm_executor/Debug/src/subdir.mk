@@ -24,14 +24,14 @@ CPP_DEPS += \
 src/%.o: ../src/%.cc
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -D__cplusplus=201103L -I/opt/mesos-1.1.0/src -I/opt/mesos-1.1.0/include -I/opt/mesos-1.1.0/build/3rdparty/protobuf-2.6.1/src -I/opt/mesos-1.1.0/build/3rdparty/glog-0.3.3/src -I/opt/mesos-1.1.0/build/src -O0 -g3 -Wall -c -fmessage-length=0 -std=gnu++11 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
+	g++ -D__cplusplus=201103L -I/opt/mesos-1.1.0/src -I/opt/mesos-1.1.0/include -I/opt/mesos-1.1.0/build/3rdparty/protobuf-2.6.1/src -I/opt/mesos-1.1.0/build/3rdparty/glog-0.3.3/src -O0 -g3 -Wall -c -fmessage-length=0 -std=gnu++11 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 src/%.o: ../src/%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -D__cplusplus=201103L -I/opt/mesos-1.1.0/src -I/opt/mesos-1.1.0/include -I/opt/mesos-1.1.0/build/3rdparty/protobuf-2.6.1/src -I/opt/mesos-1.1.0/build/3rdparty/glog-0.3.3/src -I/opt/mesos-1.1.0/build/src -O0 -g3 -Wall -c -fmessage-length=0 -std=gnu++11 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
+	g++ -D__cplusplus=201103L -I/opt/mesos-1.1.0/src -I/opt/mesos-1.1.0/include -I/opt/mesos-1.1.0/build/3rdparty/protobuf-2.6.1/src -I/opt/mesos-1.1.0/build/3rdparty/glog-0.3.3/src -O0 -g3 -Wall -c -fmessage-length=0 -std=gnu++11 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

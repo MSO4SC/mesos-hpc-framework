@@ -1,0 +1,12 @@
+language: cpp
+dist: xenial
+sudo: required
+compiler:
+- gcc
+os:
+- linux
+before_install:
+- ./scripts/build-dependencies.sh
+- echo "--------------------------------------------------------------"
+- ls /usr/local/include
+script: ./scripts/build.sh
