@@ -1,12 +1,13 @@
 language: cpp
 dist: xenial
 sudo: required
+branches:
+  only:
+  - master
 compiler:
-- gcc
+  - gcc
 os:
-- linux
+  - linux
 before_install:
-- ./scripts/build-dependencies.sh
-- echo "--------------------------------------------------------------"
-- ls /usr/local/include
+  - ./scripts/build-dependencies.sh
 script: ./scripts/build.sh

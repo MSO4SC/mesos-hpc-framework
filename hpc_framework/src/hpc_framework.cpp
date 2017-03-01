@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
-#include <string>
-#include <queue>
-
 #include <boost/lexical_cast.hpp>
 
 #include <mesos/v1/mesos.hpp>
@@ -36,18 +32,47 @@
 #include <stout/numify.hpp>
 #include <stout/option.hpp>
 #include <stout/os.hpp>
-#include <stout/option.hpp>
 #include <stout/path.hpp>
 #include <stout/stringify.hpp>
+
+#include <iostream>
+#include <queue>
+#include <string>
+#include <vector>
+
+#include "./jobsettings.pb.h"
 
 #include "common/status_utils.hpp"
 
 #include "logging/flags.hpp"
 #include "logging/logging.hpp"
 
-#include "jobsettings.pb.h"
-
-using namespace mesos::v1;
+using mesos::v1::FrameworkInfo;
+using mesos::v1::ExecutorInfo;
+using mesos::v1::Credential;
+using mesos::v1::TaskInfo;
+using mesos::v1::TaskStatus;
+using mesos::v1::TaskID;
+using mesos::v1::Offer;
+using mesos::v1::Resources;
+using mesos::v1::TASK_DROPPED;
+using mesos::v1::TASK_ERROR;
+using mesos::v1::TASK_FAILED;
+using mesos::v1::TASK_FINISHED;
+using mesos::v1::TASK_GONE;
+using mesos::v1::TASK_GONE_BY_OPERATOR;
+using mesos::v1::TASK_KILLED;
+using mesos::v1::TASK_KILLING;
+using mesos::v1::TASK_LOST;
+using mesos::v1::TASK_RUNNING;
+using mesos::v1::TASK_RUNNING;
+using mesos::v1::TASK_STAGING;
+using mesos::v1::TASK_STARTING;
+using mesos::v1::TASK_UNKNOWN;
+using mesos::v1::TASK_UNREACHABLE;
+using mesos::v1::scheduler::Call;
+using mesos::v1::scheduler::Event;
+using mesos::v1::scheduler::Mesos;
 
 using std::cerr;
 using std::cout;
@@ -60,8 +85,7 @@ using std::vector;
 
 using boost::lexical_cast;
 
-using mesos::v1::scheduler::Call;
-using mesos::v1::scheduler::Event;
+
 
 const int32_t CPUS_PER_TASK = 1;
 const int32_t MEM_PER_TASK = 128;
@@ -69,38 +93,28 @@ const int32_t MEM_PER_TASK = 128;
 class SlurmScheduler : public process::Process<SlurmScheduler> {
  public:
   SlurmScheduler(const FrameworkInfo& _framework, const ExecutorInfo& _executor,
-                const string& _master)
+                 const string& _master)
       : framework(_framework),
         executor(_executor),
         master(_master),
         state(INITIALIZING),
         tasksLaunched(0),
         tasksFinished(0),
-        totalTasks(5) {
-  }
+        totalTasks(5) {}
 
   SlurmScheduler(const FrameworkInfo& _framework, const ExecutorInfo& _executor,
-                const string& _master, const Credential& credential)
+                 const string& _master, const Credential& credential)
       : framework(_framework),
         executor(_executor),
         master(_master),
         state(INITIALIZING),
         tasksLaunched(0),
         tasksFinished(0),
-        totalTasks(5) {
-  }
+        totalTasks(5) {}
 
-  ~SlurmScheduler() {
-  }
-
-  void connected() {
-    doReliableRegistration();
-  }
-
-  void disconnected() {
-    state = DISCONNECTED;
-  }
-
+  ~SlurmScheduler() {}
+  void connected() { doReliableRegistration(); }
+  void disconnected() { state = DISCONNECTED; }
   void received(queue<Event> events) {
     while (!events.empty()) {
       Event event = events.front();
@@ -141,7 +155,7 @@ class SlurmScheduler : public process::Process<SlurmScheduler> {
         case Event::UPDATE: {
           cout << endl << "Received an UPDATE event" << endl;
 
-          // TODO Do batch processing of UPDATE events?
+          // TODO(emepetres) Do batch processing of UPDATE events?
           statusUpdate(event.update().status());
           break;
         }
@@ -178,7 +192,8 @@ class SlurmScheduler : public process::Process<SlurmScheduler> {
         }
 
         case Event::ERROR: {
-          cout << endl << "Received an ERROR event: " << event.error().message()
+          cout << endl
+               << "Received an ERROR event: " << event.error().message()
                << endl;
           process::terminate(self());
           break;
@@ -190,50 +205,47 @@ class SlurmScheduler : public process::Process<SlurmScheduler> {
         }
 
         case Event::UNKNOWN: {
-          LOG(WARNING)<< "Received an UNKNOWN event and ignored";
+          LOG(WARNING) << "Received an UNKNOWN event and ignored";
           break;
         }
       }
     }
   }
 
-protected:
-  virtual void initialize()
-  {
+ protected:
+  virtual void initialize() {
     // We initialize the library here to ensure that callbacks are only invoked
     // after the process has spawned.
-    mesos.reset(new scheduler::Mesos(
-            master,
-            mesos::ContentType::PROTOBUF,
-            process::defer(self(), &Self::connected),
-            process::defer(self(), &Self::disconnected),
-            process::defer(self(), &Self::received, lambda::_1),
-            None()));
+    mesos.reset(new Mesos(
+        master, mesos::ContentType::PROTOBUF,
+        process::defer(self(), &Self::connected),
+        process::defer(self(), &Self::disconnected),
+        process::defer(self(), &Self::received, lambda::_1), None()));
   }
 
-private:
+ private:
   void resourceOffers(const vector<Offer>& offers) {
     for (const Offer& offer : offers) {
       cout << "Received offer " << offer.id() << " with "
-      << Resources(offer.resources())
-      << endl;
+           << Resources(offer.resources()) << endl;
 
-      static const Resources TASK_RESOURCES = Resources::parse(
-          "cpus:" + stringify(CPUS_PER_TASK) +
-          ";mem:" + stringify(MEM_PER_TASK)).get();
+      static const Resources TASK_RESOURCES =
+          Resources::parse("cpus:" + stringify(CPUS_PER_TASK) + ";mem:" +
+                           stringify(MEM_PER_TASK))
+              .get();
 
       Resources remaining = offer.resources();
 
       // Launch tasks.
       vector<TaskInfo> tasks;
       while (tasksLaunched < totalTasks &&
-          remaining.flatten().contains(TASK_RESOURCES)) {
+             remaining.flatten().contains(TASK_RESOURCES)) {
         int taskId = tasksLaunched++;
 
-        cout << "Launching task " << taskId << " using offer "
-        << offer.id() << endl;
+        cout << "Launching task " << taskId << " using offer " << offer.id()
+             << endl;
 
-        //job settings
+        // job settings
         slurm_framework::jobsettings job_settings;
         job_settings.set_type(slurm_framework::jobsettings::SBATCH);
 
@@ -248,22 +260,20 @@ private:
         job_settings.add_modules("parmetis");
         job_settings.add_modules("zlib");
 
-//        job_settings.set_partition("thinnodes");
-//        job_settings.set_nodes(2);
-//        job_settings.set_tasks(8);
-//        job_settings.set_tasks_per_node(4);
-//        job_settings.set_max_time("00:00:15");
+        //        job_settings.set_partition("thinnodes");
+        //        job_settings.set_nodes(2);
+        //        job_settings.set_tasks(8);
+        //        job_settings.set_tasks_per_node(4);
+        //        job_settings.set_max_time("00:00:15");
 
         string serialized_job_settings = job_settings.SerializeAsString();
 
         TaskInfo task;
         task.set_name("Task " + lexical_cast<string>(taskId));
-        task.mutable_task_id()->set_value(
-            lexical_cast<string>(taskId));
+        task.mutable_task_id()->set_value(lexical_cast<string>(taskId));
         task.mutable_agent_id()->MergeFrom(offer.agent_id());
         task.mutable_executor()->MergeFrom(executor);
         task.set_data(serialized_job_settings);
-
 
         Try<Resources> flattened = TASK_RESOURCES.flatten(framework.role());
         CHECK_SOME(flattened);
@@ -296,8 +306,7 @@ private:
     }
   }
 
-  void statusUpdate(const TaskStatus& status)
-  {
+  void statusUpdate(const TaskStatus& status) {
     cout << "Task " << status.task_id() << " is in state " << status.state();
 
     if (status.has_message()) {
@@ -323,15 +332,13 @@ private:
       ++tasksFinished;
     }
 
-    if (status.state() == TASK_LOST ||
-        status.state() == TASK_KILLED ||
+    if (status.state() == TASK_LOST || status.state() == TASK_KILLED ||
         status.state() == TASK_FAILED) {
-      EXIT(EXIT_FAILURE)
-      << "Exiting because task " << status.task_id()
-      << " is in unexpected state " << status.state()
-      << " with reason " << status.reason()
-      << " from source " << status.source()
-      << " with message '" << status.message() << "'";
+      EXIT(EXIT_FAILURE) << "Exiting because task " << status.task_id()
+                         << " is in unexpected state " << status.state()
+                         << " with reason " << status.reason()
+                         << " from source " << status.source()
+                         << " with message '" << status.message() << "'";
     }
 
     if (tasksFinished == totalTasks) {
@@ -355,9 +362,7 @@ private:
 
     mesos->send(call);
 
-    process::delay(Seconds(1),
-        self(),
-        &Self::doReliableRegistration);
+    process::delay(Seconds(1), self(), &Self::doReliableRegistration);
   }
 
   void finalize() {
@@ -372,13 +377,9 @@ private:
   FrameworkInfo framework;
   const ExecutorInfo executor;
   const string master;
-  process::Owned<scheduler::Mesos> mesos;
+  process::Owned<Mesos> mesos;
 
-  enum State {
-    INITIALIZING = 0,
-    SUBSCRIBED = 1,
-    DISCONNECTED = 2
-  }state;
+  enum State { INITIALIZING = 0, SUBSCRIBED = 1, DISCONNECTED = 2 } state;
 
   int tasksLaunched;
   int tasksFinished;
@@ -386,8 +387,10 @@ private:
 };
 
 void usage(const char* argv0, const flags::FlagsBase& flags) {
-  cerr << "Usage: " << Path(argv0).basename() << " [...]" << endl << endl
-       << "Supported options:" << endl << flags.usage();
+  cerr << "Usage: " << Path(argv0).basename() << " [...]" << endl
+       << endl
+       << "Supported options:" << endl
+       << flags.usage();
 }
 
 int main(int argc, char** argv) {
@@ -426,7 +429,7 @@ int main(int argc, char** argv) {
 
   // Log any flag warnings (after logging is initialized).
   for (const flags::Warning& warning : load->warnings) {
-    LOG(WARNING)<< warning.message;
+    LOG(WARNING) << warning.message;
   }
 
   FrameworkInfo framework;

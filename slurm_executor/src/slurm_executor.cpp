@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
-#include <queue>
-#include <string>
-
 #include <mesos/http.hpp>
 
 #include <mesos/v1/executor.hpp>
@@ -32,19 +28,23 @@
 #include <stout/os.hpp>
 #include <stout/uuid.hpp>
 
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
 
-#include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
 #include <boost/random/random_device.hpp>
 
+#include <unistd.h>
 #include <libssh/libssh.h>
 
-#include <unistd.h>
+#include <iostream>
+#include <list>
+#include <queue>
+#include <string>
 
-#include "jobsettings.pb.h"
+#include "./jobsettings.pb.h"
 
 using std::cout;
 using std::cerr;
@@ -78,8 +78,7 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
         executorId(_executorId),
         state(DISCONNECTED),
         slurm_control_th(0),
-        my_ssh_session(0) {
-  }
+        my_ssh_session(0) {}
 
   void connected() {
     state = CONNECTED;
@@ -176,7 +175,8 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
               sendStatusUpdate(task, TaskState::TASK_STARTING);
 
               jobs_mutex.lock();
-              slurm_jobs.emplace_back(JobInfo(task, name));  // Save task copy to monitor it in Slurm
+              slurm_jobs.emplace_back(JobInfo(
+                  task, name));  // Save task copy to monitor it in Slurm
               jobs_mutex.unlock();
 
             } else {
@@ -191,7 +191,7 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
 
         case Event::LAUNCH_GROUP: {
           cout << "Received a LAUNCH_GROUP event";
-          // TODO Implement this.
+          // TODO(emepetres) Implement this.
           break;
         }
 
@@ -227,7 +227,7 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
         }
 
         case Event::UNKNOWN: {
-          LOG(WARNING)<< "Received an UNKNOWN event and ignored";
+          LOG(WARNING) << "Received an UNKNOWN event and ignored";
           break;
         }
       }
@@ -241,32 +241,37 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
       jobs_mutex.lock();
 
       list<JobInfo>::iterator jobit = slurm_jobs.begin();
-      while(jobit != slurm_jobs.end()) {
-        //the job takes some seconds to appear in the queues list
+      while (jobit != slurm_jobs.end()) {
+        // the job takes some seconds to appear in the queues list
         if (!jobit->jobid) {
-          getJobIdByName(jobit->name, jobit->jobid);
+          getJobIdByName(jobit->name, &(jobit->jobid));
         }
 
         if (jobit->jobid) {
-          TaskState new_state = jobit->state; //set new state as old in case there is any error
-          getJobStatus(jobit->jobid, new_state); // don't modify new_state if there is an error
+          TaskState new_state =
+              jobit->state;  // set new state as old in case there is any error
+          getJobStatus(
+              jobit->jobid,
+              &new_state);  // don't modify new_state if there is an error
 
           if (jobit->state == new_state) {
             ++jobit;
-            continue; // don't do anything if nothing changes
+            continue;  // don't do anything if nothing changes
           }
 
           // if the job finished quickly we send first a running state
-          if (new_state == TaskState::TASK_FINISHED && jobit->state == TaskState::TASK_STARTING) {
+          if (new_state == TaskState::TASK_FINISHED &&
+              jobit->state == TaskState::TASK_STARTING) {
             sendStatusUpdate(jobit->task, TaskState::TASK_RUNNING);
           }
 
           sendStatusUpdate(jobit->task, new_state);
 
-          if (new_state == TaskState::TASK_FINISHED || new_state == TaskState::TASK_FAILED) {
-            jobit = slurm_jobs.erase(jobit); // delete job if finished
+          if (new_state == TaskState::TASK_FINISHED ||
+              new_state == TaskState::TASK_FAILED) {
+            jobit = slurm_jobs.erase(jobit);  // delete job if finished
           } else {
-            jobit->state = new_state; // save new state in the job info
+            jobit->state = new_state;  // save new state in the job info
             ++jobit;
           }
         } else {
@@ -278,30 +283,26 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
     }
   }
 
-protected:
+ protected:
   struct JobInfo {
-    TaskInfo task; // mesos task object
-    string name; // name used to register the job in slurm
-    ulong jobid; // jobid assigned in slurm queues
+    TaskInfo task;  // mesos task object
+    string name;    // name used to register the job in slurm
+    ulong jobid;    // jobid assigned in slurm queues
     TaskState state;
 
     JobInfo(TaskInfo _task, string _name)
-    : task(_task),
-      name(_name),
-      jobid(0),
-      state(TaskState::TASK_STARTING) {}
+        : task(_task), name(_name), jobid(0), state(TaskState::TASK_STARTING) {}
   };
 
   virtual void initialize() {
     // We initialize the library here to ensure that callbacks are only invoked
     // after the process has spawned.
-    mesos.reset(new Mesos(
-            mesos::ContentType::PROTOBUF,
-            process::defer(self(), &Self::connected),
-            process::defer(self(), &Self::disconnected),
-            process::defer(self(), &Self::received, lambda::_1)));
+    mesos.reset(new Mesos(mesos::ContentType::PROTOBUF,
+                          process::defer(self(), &Self::connected),
+                          process::defer(self(), &Self::disconnected),
+                          process::defer(self(), &Self::received, lambda::_1)));
 
-    //get ssh parameters
+    // get ssh parameters
     Option<string> host = os::getenv("SSH_HOST");
     if (host.isNone()) {
       EXIT(EXIT_FAILURE) << "Expecting ssh host in the environment";
@@ -330,8 +331,8 @@ protected:
     // Connect to server
     int rc = ssh_connect(my_ssh_session);
     if (rc != SSH_OK) {
-      fprintf(stderr, "Error connecting to %s: %s\n",
-          host.get().c_str(), ssh_get_error(my_ssh_session));
+      fprintf(stderr, "Error connecting to %s: %s\n", host.get().c_str(),
+              ssh_get_error(my_ssh_session));
       exit(-1);
     }
 
@@ -342,37 +343,35 @@ protected:
       exit(-1);
     }
 
-    // Authenticate ourselves TODO public key authentication (see http://api.libssh.org/master/libssh_tutor_authentication.html#authentication_details)
+    // Authenticate ourselves TODO public key authentication (see
+    // http://api.libssh.org/master/libssh_tutor_authentication.html#authentication_details)
     rc = ssh_userauth_password(my_ssh_session, NULL, password.get().c_str());
     if (rc != SSH_AUTH_SUCCESS) {
       fprintf(stderr, "Error authenticating with password: %s\n",
-          ssh_get_error(my_ssh_session));
+              ssh_get_error(my_ssh_session));
       ssh_disconnect(my_ssh_session);
       ssh_free(my_ssh_session);
       exit(-1);
     }
 
     // Create and start Slurm control thread
-    slurm_control_th = new boost::thread(&SlurmExecutor::slurmControlLoop, this);
+    slurm_control_th =
+        new boost::thread(&SlurmExecutor::slurmControlLoop, this);
   }
 
-private:
+ private:
   const FrameworkID frameworkId;
   const ExecutorID executorId;
   process::Owned<Mesos> mesos;
-  enum State
-  {
-    CONNECTED,
-    DISCONNECTED,
-    SUBSCRIBED
-  }state;
+  enum State { CONNECTED, DISCONNECTED, SUBSCRIBED } state;
 
   LinkedHashMap<UUID, Call::Update> updates;  // Unacknowledged updates.
-  LinkedHashMap<TaskID, TaskInfo> tasks;// Unacknowledged tasks.
+  LinkedHashMap<TaskID, TaskInfo> tasks;      // Unacknowledged tasks.
 
-  list<JobInfo> slurm_jobs;// Tasks currently managed by Slurm.
-  boost::mutex jobs_mutex;// Mutex to lock the slurm_tasks list between threads.
-  thread * slurm_control_th;// Slurm control thread.
+  list<JobInfo> slurm_jobs;  // Tasks currently managed by Slurm.
+  boost::mutex
+      jobs_mutex;  // Mutex to lock the slurm_tasks list between threads.
+  thread* slurm_control_th;  // Slurm control thread.
 
   ssh_session my_ssh_session;
 
@@ -381,73 +380,72 @@ private:
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
       "abcdefghijklmnopqrstuvwxyz");
 
-  int verifyKnownhost()
-  {
+  int verifyKnownhost() {
     int state, hlen;
-    unsigned char *hash = NULL;
-    char *hexa;
+    unsigned char* hash = NULL;
+    char* hexa;
     char buf[10];
     state = ssh_is_server_known(my_ssh_session);
     hlen = ssh_get_pubkey_hash(my_ssh_session, &hash);
-    if (hlen < 0)
-    return -1;
-    switch (state)
-    {
+    if (hlen < 0) return -1;
+    switch (state) {
       case SSH_SERVER_KNOWN_OK:
-      break; /* ok */
+        break; /* ok */
       case SSH_SERVER_KNOWN_CHANGED:
-      fprintf(stderr, "Host key for server changed: it is now:\n");
-      ssh_print_hexa("Public key hash", hash, hlen);
-      fprintf(stderr, "For security reasons, connection will be stopped\n");
-      free(hash);
-      return -1;
+        fprintf(stderr, "Host key for server changed: it is now:\n");
+        ssh_print_hexa("Public key hash", hash, hlen);
+        fprintf(stderr, "For security reasons, connection will be stopped\n");
+        free(hash);
+        return -1;
       case SSH_SERVER_FOUND_OTHER:
-      fprintf(stderr, "The host key for this server was not found but an other"
-          "type of key exists.\n");
-      fprintf(stderr, "An attacker might change the default server key to"
-          "confuse your client into thinking the key does not exist\n");
-      free(hash);
-      return -1;
+        fprintf(stderr,
+                "The host key for this server was not found but an other"
+                "type of key exists.\n");
+        fprintf(stderr,
+                "An attacker might change the default server key to"
+                "confuse your client into thinking the key does not exist\n");
+        free(hash);
+        return -1;
       case SSH_SERVER_FILE_NOT_FOUND:
-      fprintf(stderr, "Could not find known host file.\n");
-      fprintf(stderr, "If you accept the host key here, the file will be"
-          "automatically created.\n");
+        fprintf(stderr, "Could not find known host file.\n");
+        fprintf(stderr,
+                "If you accept the host key here, the file will be"
+                "automatically created.\n");
       /* fallback to SSH_SERVER_NOT_KNOWN behavior */
       case SSH_SERVER_NOT_KNOWN:
-      hexa = ssh_get_hexa(hash, hlen);
-      fprintf(stderr,"The server is unknown. Do you trust the host key?\n");
-      fprintf(stderr, "Public key hash: %s\n", hexa);
-      free(hexa);
-      if (fgets(buf, sizeof(buf), stdin) == NULL)  //FIXME what to do in this case?
-      {
-        free(hash);
-        return -1;
-      }
-      if (strncasecmp(buf, "yes", 3) != 0)
-      {
-        free(hash);
-        return -1;
-      }
-      if (ssh_write_knownhost(my_ssh_session) < 0)
-      {
-        fprintf(stderr, "Error %s\n", strerror(errno));
-        free(hash);
-        return -1;
-      }
-      break;
+        hexa = ssh_get_hexa(hash, hlen);
+        fprintf(stderr, "The server is unknown. Do you trust the host key?\n");
+        fprintf(stderr, "Public key hash: %s\n", hexa);
+        free(hexa);
+        if (fgets(buf, sizeof(buf), stdin) == NULL) {
+          // FIXME what to do in this case?
+          free(hash);
+          return -1;
+        }
+        if (strncasecmp(buf, "yes", 3) != 0) {
+          free(hash);
+          return -1;
+        }
+        if (ssh_write_knownhost(my_ssh_session) < 0) {
+          fprintf(stderr, "Error %s\n", strerror(errno));
+          free(hash);
+          return -1;
+        }
+        break;
       case SSH_SERVER_ERROR:
-      fprintf(stderr, "Error %s", ssh_get_error(my_ssh_session));
-      free(hash);
-      return -1;
+        fprintf(stderr, "Error %s", ssh_get_error(my_ssh_session));
+        free(hash);
+        return -1;
     }
     free(hash);
     return 0;
   }
 
-  string getSlurmCall(const string& job_name, const slurm_framework::jobsettings& job_settings) const {
+  string getSlurmCall(const string& job_name,
+                      const slurm_framework::jobsettings& job_settings) const {
     stringstream slurm_call_stream;
 
-    //first set modules
+    // first set modules
     if (job_settings.modules_size() > 0) {
       slurm_call_stream << "module load";
       for (int i = 0; i < job_settings.modules_size(); ++i) {
@@ -457,16 +455,17 @@ private:
     }
 
     if (job_settings.type() == slurm_framework::jobsettings::SBATCH) {
-      //sbatch command plus job name
+      // sbatch command plus job name
       slurm_call_stream << "sbatch -J '" << job_name << "'";
     } else if (job_settings.type() == slurm_framework::jobsettings::SRUN) {
-      //srun command plus nohup to detach the execution from this session and job name
+      // srun command plus nohup to detach the execution from this session and
+      // job name
       slurm_call_stream << "nohup srun -J '" << job_name << "'";
     } else {
-      //TODO ERROR
+      // TODO(emepetres) ERROR
     }
 
-    //add slurm parameters
+    // add slurm parameters
     if (job_settings.has_partition()) {
       slurm_call_stream << " -p " << job_settings.partition();
     }
@@ -480,21 +479,22 @@ private:
     }
 
     if (job_settings.has_tasks_per_node()) {
-      slurm_call_stream << " --ntasks-per-node=" << job_settings.tasks_per_node();
+      slurm_call_stream << " --ntasks-per-node="
+                        << job_settings.tasks_per_node();
     }
 
     if (job_settings.has_max_time()) {
       slurm_call_stream << " -t " << job_settings.max_time();
     }
 
-    //add executable and arguments
+    // add executable and arguments
     slurm_call_stream << " " << job_settings.command();
 
-//    //disable output
-//    slurm_call_stream << " >/dev/null 2>&1";
+    //    //disable output
+    //    slurm_call_stream << " >/dev/null 2>&1";
 
     if (job_settings.type() == slurm_framework::jobsettings::SRUN) {
-      //run in the background (don't get blocked until it finish)
+      // run in the background (don't get blocked until it finish)
       slurm_call_stream << " &";
     }
 
@@ -507,8 +507,7 @@ private:
     char buffer[256];
     int nbytes;
     channel = ssh_channel_new(my_ssh_session);
-    if (channel == NULL)
-    return SSH_ERROR;
+    if (channel == NULL) return SSH_ERROR;
     rc = ssh_channel_open_session(channel);
     if (rc != SSH_OK) {
       ssh_channel_free(channel);
@@ -527,16 +526,15 @@ private:
     return SSH_OK;
   }
 
-  int getJobIdByName(const string& name, ulong& jobid) const {
-    string command = "sacct -n -o jobid -X --name='" + name +"'";
+  int getJobIdByName(const string& name, ulong* jobid) const {
+    string command = "sacct -n -o jobid -X --name='" + name + "'";
 
     ssh_channel channel;
     int rc;
     char buffer[256];
     int nbytes;
     channel = ssh_channel_new(my_ssh_session);
-    if (channel == NULL)
-    return SSH_ERROR;
+    if (channel == NULL) return SSH_ERROR;
     rc = ssh_channel_open_session(channel);
     if (rc != SSH_OK) {
       ssh_channel_free(channel);
@@ -561,7 +559,7 @@ private:
       ssh_channel_free(channel);
       return SSH_ERROR;
     } else if (output.str().size() > 0) {
-      jobid = std::stoul(output.str());
+      *jobid = std::stoul(output.str());
     }
 
     ssh_channel_send_eof(channel);
@@ -570,7 +568,7 @@ private:
     return SSH_OK;
   }
 
-  int getJobStatus(const ulong& jobid, TaskState& state) const {
+  int getJobStatus(const ulong& jobid, TaskState* state) const {
     string command = "sacct -n -o state -X -P -j " + std::to_string(jobid);
 
     ssh_channel channel;
@@ -578,8 +576,7 @@ private:
     char buffer[256];
     int nbytes;
     channel = ssh_channel_new(my_ssh_session);
-    if (channel == NULL)
-    return SSH_ERROR;
+    if (channel == NULL) return SSH_ERROR;
     rc = ssh_channel_open_session(channel);
     if (rc != SSH_OK) {
       ssh_channel_free(channel);
@@ -605,28 +602,24 @@ private:
       return SSH_ERROR;
     } else if (output.str().size() > 0) {
       string state_str = output.str();
-      state_str.pop_back(); // delete end of line character
-      //cout << "DEBUG RECEIVED: " << state_str << endl;
+      state_str.pop_back();  // delete end of line character
+      // cout << "DEBUG RECEIVED: " << state_str << endl;
 
-      if (state_str == "PENDING" ||
-          state_str == "CONFIGURING") {
-        state = TaskState::TASK_STARTING;
-      } else if (state_str == "RUNNING" ||
-          state_str == "COMPLETING") {
-        state = TaskState::TASK_RUNNING;
+      if (state_str == "PENDING" || state_str == "CONFIGURING") {
+        *state = TaskState::TASK_STARTING;
+      } else if (state_str == "RUNNING" || state_str == "COMPLETING") {
+        *state = TaskState::TASK_RUNNING;
 
-      } else if (state_str == "COMPLETED" ||
-          state_str == "PREEMPTED") {
-        state = TaskState::TASK_FINISHED;
-      } else if (state_str == "BOOT_FAIL" ||
-          state_str == "CANCELLED" ||
-          state_str == "DEADLINE" ||
-          state_str == "FAILED" ||
-          state_str == "TIMEOUT"){
-        state = TaskState::TASK_FAILED;
-      } else { // RESIZING, SUSPENDED
-        state = TaskState::TASK_FAILED;
-        cout << "ERROR: State '" << state_str << "' could not be recognized." << endl;
+      } else if (state_str == "COMPLETED" || state_str == "PREEMPTED") {
+        *state = TaskState::TASK_FINISHED;
+      } else if (state_str == "BOOT_FAIL" || state_str == "CANCELLED" ||
+                 state_str == "DEADLINE" || state_str == "FAILED" ||
+                 state_str == "TIMEOUT") {
+        *state = TaskState::TASK_FAILED;
+      } else {  // RESIZING, SUSPENDED
+        *state = TaskState::TASK_FAILED;
+        cout << "ERROR: State '" << state_str << "' could not be recognized."
+             << endl;
       }
     }
 
@@ -640,8 +633,9 @@ private:
     stringstream ramdom_ss;
 
     boost::random::random_device rng;
-    boost::random::uniform_int_distribution<> index_dist(0, alphanum.size() - 1);
-    for(int i = 0; i < len; ++i) {
+    boost::random::uniform_int_distribution<> index_dist(0,
+                                                         alphanum.size() - 1);
+    for (int i = 0; i < len; ++i) {
       ramdom_ss << alphanum[index_dist(rng)];
     }
 
@@ -652,7 +646,7 @@ private:
 int main() {
   std::ofstream out("/home/vagrant/out.txt");
   std::ofstream err("/home/vagrant/err.txt");
-  cout.rdbuf(out.rdbuf());  //redirect std::cout to out.txt
+  cout.rdbuf(out.rdbuf());  // redirect std::cout to out.txt
   cerr.rdbuf(err.rdbuf());
 
   FrameworkID frameworkId;
