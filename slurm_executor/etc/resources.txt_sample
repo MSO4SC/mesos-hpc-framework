@@ -1,0 +1,26 @@
+[
+  {
+    "name": "cpus",
+    "type": "SCALAR",
+    "scalar": {
+      "value": 96
+    },
+    "role": "hpc"
+  },
+  {
+    "name": "nodes",
+    "type": "SCALAR",
+    "scalar": {
+      "value": 4
+    },
+    "role": "hpc"
+  },
+  {
+    "name": "time",
+    "type": "SCALAR",
+    "scalar": {
+      "value": 1440
+    },
+    "role": "hpc"
+  }
+]
