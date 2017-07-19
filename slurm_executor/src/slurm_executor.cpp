@@ -36,8 +36,8 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/random/random_device.hpp>
 
-#include <unistd.h>
 #include <libssh/libssh.h>
+#include <unistd.h>
 
 #include <iostream>
 #include <list>
@@ -526,6 +526,16 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
     return SSH_OK;
   }
 
+  /** FIXME
+   * We highly recommend that people writing meta-schedulers or that wish to
+   * interrogate SLURM in scripts do so using the squeue and sacct commands. We
+   * strongly recommend that your code performs these queries once every 60
+   * seconds or longer. Using these commands contacts the master controller
+   * directly, the same process responsible for scheduling all work on the
+   * cluster. Polling more frequently, especially across all users on the
+   * cluster, will slow down response times and may bring scheduling to a crawl.
+   * Please don't.
+   */
   int getJobIdByName(const string& name, ulong* jobid) const {
     string command = "sacct -n -o jobid -X --name='" + name + "'";
 
@@ -568,6 +578,16 @@ class SlurmExecutor : public process::Process<SlurmExecutor> {
     return SSH_OK;
   }
 
+  /** FIXME
+   * We highly recommend that people writing meta-schedulers or that wish to
+   * interrogate SLURM in scripts do so using the squeue and sacct commands. We
+   * strongly recommend that your code performs these queries once every 60
+   * seconds or longer. Using these commands contacts the master controller
+   * directly, the same process responsible for scheduling all work on the
+   * cluster. Polling more frequently, especially across all users on the
+   * cluster, will slow down response times and may bring scheduling to a crawl.
+   * Please don't.
+   */
   int getJobStatus(const ulong& jobid, TaskState* state) const {
     string command = "sacct -n -o state -X -P -j " + std::to_string(jobid);
 

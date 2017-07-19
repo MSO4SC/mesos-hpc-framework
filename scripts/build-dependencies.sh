@@ -38,10 +38,45 @@ cd mesos-*
 # Bootstrap (Only required if building from git repository).
 #./bootstrap
 
+##################################################
+# module load gcc/6.3.0
+# module load curl
+# module load zlib
+
+# wget -q http://ftp.nluug.nl/internet/apache//apr/apr-1.5.2.tar.gz
+# tar -xvzf apr-*
+# cd apr-*
+# ./configure --prefix=/home/otras/ari/jci/local
+# make
+# make install
+# cd ..
+# wget -q http://apache.40b.nl//apr/apr-util-1.5.4.tar.gz
+# tar -xvzf apr-util*
+# cd apr-util*
+# ./configure --prefix=/home/otras/ari/jci/local --with-apr=/home/otras/ari/jci/local --with-openssl=/usr
+# make
+# make install
+# wget -q ftp://ftp.cyrusimap.org/cyrus-sasl/cyrus-sasl-2.1.26.tar.gz
+# tar -xvzf cyrus-sasl-2*
+# cd cyrus-sasl-2*
+# ./configure --prefix=/home/otras/ari/jci/local --enable-cram
+# make
+# make install
+# wget -q http://ftp.tudelft.nl/apache/subversion/subversion-1.9.5.tar.gz
+# tar -xvzf subversion-*
+# cd subversion-*
+# ./configure --prefix=/home/otras/ari/jci/local --with-apr=/home/otras/ari/jci/local
+# #ln -s /usr/local/lib/sasl2 /usr/lib/sasl2
+# INCLUDE=$INCLUDE:~/local
+##################################################
+
 # Configure and build.
 mkdir build
 cd build
+##################################################
 ../configure --disable-python --disable-java
+##################################################
+# ../configure LD_LIBRARY_PATH=/home/otras/ari/jci/local/lib/ SASL_PATH=/home/otras/ari/jci/local/lib/sasl2 --disable-python --disable-java --with-apr=/home/otras/ari/jci/local --with-sasl=/home/otras/ari/jci/local
 make
 
 # Run test suite.
